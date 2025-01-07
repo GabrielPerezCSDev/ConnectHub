@@ -70,7 +70,8 @@ int start_socketpool(SocketPool* socket_pool) {
     //start each socket 
     int num_sockets = socket_pool->total_sockets;
     for(int i = 0; i < num_sockets; i++){
-        printf("Starting socket %d\n", (i+1));
+        printf("\nStarting socket %d\n", (i+1));
+        start_socket(&socket_pool->sockets[i]);
     }
     
 

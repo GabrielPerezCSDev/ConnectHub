@@ -38,7 +38,7 @@ Router* create_router(){
 
     int port = USER_SOCKET_PORT_START;
     for(int i = 0; i < num_buckets; i++){
-        printf("\nGenerating bucket %d: \n", (i+1));
+        printf("\n\nGenerating bucket %d: \n", (i+1));
         router->socket_pool[i] = *create_socketpool(SOCKETS_PER_BUCKET, USERS_PER_SOCKET, port);
         port += SOCKETS_PER_BUCKET * USERS_PER_SOCKET;
         if(port > (NUMBER_OF_USERS + USER_SOCKET_PORT_START)){

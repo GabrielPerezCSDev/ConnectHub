@@ -118,6 +118,13 @@ SocketConfig create_default_socket_config(void);
 Socket create_socket(const SocketInitInfo);
 
 /*
+* Start the socket to be able to be accessed
+* @param socket the created socket held by the socket pool
+* @return the return value for error notification
+*/
+int start_socket(Socket* socket);
+
+/*
  * Clean up and free a socket
  * @param socket Socket to destroy
  */

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "server/socket.h"
 #include <string.h>
+#include <stdio.h>
 
 /* Socket configuration defaults */
 #define DEFAULT_RECV_BUFFER 8192   /* 8KB receive buffer */
@@ -134,4 +135,13 @@ Socket socket = {
 
 return socket;
 
+}
+
+
+int start_socket(Socket* socket){
+    if(!socket) return -1;
+    for(int i = 0; i < socket->ports.port_capacity;i++){
+        printf("Starting the port %d\n", socket->ports.port_numbers[i]);
+    }
+    return 1;
 }
