@@ -8,7 +8,7 @@
 
 
 #define NUMBER_OF_USERS 1000
-#define SOCKETS_PER_BUCKET 10
+#define SOCKETS_PER_BUCKET 5
 #define USERS_PER_SOCKET 10
 #define MAIN_SOCKET_PORT 8080
 #define USER_SOCKET_PORT_START 8081
@@ -25,12 +25,18 @@ typedef struct{
     RouterConfig config;
     int active_ports[NUMBER_OF_USERS]; //used to track port usage (also implicitly conccurent users)
     SocketPool* socket_pool; //the socket pool for the router
+    int num_buckets;
 } Router;
 
 /*
 * Create router and populate the fields
 */
 Router* create_router();
+
+/*
+* Start the router (enable socket pools and sockets)
+*/
+int start_router(Router* router);
 
 /*
 * New connection for the router so assign it if possible to a socket (not in use) 

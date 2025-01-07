@@ -24,6 +24,9 @@ typedef struct {
 }SocketPool;
 
 SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_port);
+
+int start_socketpool(SocketPool* socket_pool);
+
 /*
 //delete a socket pool
 int delete_socketpool(SocketPool* socket_pool);
@@ -31,7 +34,7 @@ int delete_socketpool(SocketPool* socket_pool);
 void* socket_pool_thread(void* arg);
 
 //start the socket pool and create the thread to the sockets alive
-int start_socketpool(SocketPool* socket_pool);
+
 
 // Get pool status
 int get_socketpool_status(SocketPool* socket_pool);

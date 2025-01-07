@@ -1,8 +1,9 @@
 #include "server/socket_pool.h"
-
+#include "server/socket.h"
 
 //create the socket pool with a size and start port
 SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_port){
+    printf("Number of sockets for the pool: %d\n", num_sockets);
     SocketPool* pool = (SocketPool*)malloc(sizeof(SocketPool));
     if (!pool) return NULL;
     int max_users = num_sockets * users_per_socket;
@@ -27,36 +28,55 @@ SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_p
     pool->thread_id = -1;
 
 
+    
     // Create sockets
-    //int port = start_port;
+    int port = start_port;
     for(int i = 0; i < num_sockets; i++) {
-        printf("creating socket #%d \n", (i+1));
-        int* ports = (*int) malloc(sizeof(int) * users_per_socket);
+        printf("creating socket #%d", (i+1));
         
-        if (0) {
+        int* ports = (int*) malloc(sizeof(int) * users_per_socket);
+        printf(" ports : {");
+        for(int j = 0; j < users_per_socket; j++){
+            ports[j] = port;
+            port++;
+            printf("%d ", port);
+        }
+        SocketInitInfo init_info = {
+            .config = scf,
+            .port_numbers = ports,
+            .port_count = users_per_socket,
+            .max_connections = users_per_socket  // One connection per port
+        };
+        Socket socket = create_socket(init_info);
+        printf("}\n\n");
+        if (socket.status == SOCKET_STATUS_ERROR) {
             // Cleanup and return NULL
-            for(int j = 0; j < i; j++) {
+            for(int z = 0; z < i; z++) {
                 //destroy_socket(&pool->sockets[j]);
             }
             free(pool->sockets);
             free(pool);
             return NULL;
         }
+
+        pool->sockets[i] = socket;
     }
 
     return pool;
 }
-/*
+
 
 int start_socketpool(SocketPool* socket_pool) {
-    if (!socket_pool || socket_pool->thread_id != -1) return -1;
+    //start each socket 
+    int num_sockets = socket_pool->total_sockets;
+    for(int i = 0; i < num_sockets; i++){
+        printf("Starting socket %d\n", (i+1));
+    }
     
-    int result = pthread_create(&socket_pool->thread_id, NULL, 
-                              socket_pool_thread, socket_pool);
-    
-    return (result == 0) ? 0 : -1;
-}
 
+    return 1;
+}
+/*
 int delete_socketpool(SocketPool* socket_pool) {
     if (!socket_pool) return -1;
 

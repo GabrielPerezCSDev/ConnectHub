@@ -98,6 +98,7 @@ typedef struct {
     ConnectionManager conns;    /* Connection and epoll management */
     SocketStats stats;         /* Performance and activity statistics */
     pthread_t thread_id;       /* ID of thread managing this socket */
+    int status;
 } Socket;
 
 /* Function declarations */

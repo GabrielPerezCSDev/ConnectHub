@@ -27,7 +27,7 @@ Router* create_router(){
 
     //generate the SocketBuckets 
     int num_buckets = ceil((double)  NUMBER_OF_USERS / (SOCKETS_PER_BUCKET * USERS_PER_SOCKET));
-
+    router->num_buckets = num_buckets;
     printf("number of buckets %d\n", num_buckets); 
 
     router->socket_pool = (SocketPool*) malloc(sizeof(SocketPool) * num_buckets);
@@ -48,4 +48,19 @@ Router* create_router(){
     }
 
     return router;
+}
+
+
+int start_router(Router* router){
+    printf("\n\n Starting the router \n");
+    if (!router) return -1;
+
+    for(int i = 0; i < router->num_buckets; i++){
+        printf("\nStarting bucket %d:\n", (i+1));
+        if(start_socketpool(&router->socket_pool[i]) < 1){
+            return -1; //error
+        }
+    }
+
+    return 1;
 }
