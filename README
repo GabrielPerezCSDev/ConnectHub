@@ -1,0 +1,47 @@
+# multiplexd
+
+A lightweight, scalable multiplayer server framework designed for efficient connection management and direct port routing.
+
+## Overview
+
+multiplexd is a C-based server framework that enables multiplayer applications through efficient socket and connection management. Each user receives a dedicated port while sharing socket resources, allowing for scalable and efficient multiplayer server applications.
+
+## Architecture
+
+### Core Components
+
+1. **Router**
+  - Manages new connections
+  - Assigns unique ports to users
+  - Tracks port usage
+  - Initializes socket buckets
+
+2. **Socket Pools**
+  - Organized in buckets for scalability
+  - Groups multiple sockets
+  - Manages socket lifecycle
+
+3. **Individual Sockets** (In Development)
+  - Will handle multiple user connections
+  - Direct port access
+  - Non-blocking I/O
+  - epoll-based multiplexing
+
+## Project Status
+
+Currently implementing core architecture:
+- Basic router functionality
+- Socket pool and bucket management
+- Socket implementation (In Progress)
+
+Future work will focus on:
+- Socket connection handling
+- epoll implementation
+- Thread management
+- Resource monitoring
+
+## Technical Stack
+- Written in C
+- Uses epoll (planned)
+- Thread-per-socket design
+- Non-blocking I/O (planned)
