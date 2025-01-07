@@ -30,9 +30,10 @@ SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_p
     // Create sockets
     //int port = start_port;
     for(int i = 0; i < num_sockets; i++) {
-        printf("crating socket #%d \n", (i+1));
-        //pool->sockets[i] = create_socket(scf, port++);
-        if (pool->sockets[i].status == SOCKET_STATUS_ERROR) {
+        printf("creating socket #%d \n", (i+1));
+        int* ports = (*int) malloc(sizeof(int) * users_per_socket);
+        
+        if (0) {
             // Cleanup and return NULL
             for(int j = 0; j < i; j++) {
                 //destroy_socket(&pool->sockets[j]);

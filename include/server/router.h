@@ -28,14 +28,14 @@ typedef struct{
 } Router;
 
 /*
-* Create router and popullate the fields
+* Create router and populate the fields
 */
 Router* create_router();
 
 /*
 * New connection for the router so assign it if possible to a socket (not in use) 
 */
-int handle_new_connetion(Router* router);
+int handle_new_connection(Router* router);
 
 int remove_connection(Router* router);
 

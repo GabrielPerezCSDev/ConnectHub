@@ -44,7 +44,7 @@ Router* create_router(){
         if(port > (NUMBER_OF_USERS + USER_SOCKET_PORT_START)){
             break;
         }
-        printf("Finished generatring bucket %d with the final port %d \n", (i+1), port);
+        printf("Finished generating bucket %d with the final port %d \n\n", (i+1), port);
     }
 
     return router;
