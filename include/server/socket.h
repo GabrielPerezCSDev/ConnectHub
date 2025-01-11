@@ -4,6 +4,11 @@
  */
 #include <time.h>
 #include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>  
+#include <unistd.h> 
+
 #ifndef SOCKET_H
 #define SOCKET_H
 
@@ -98,8 +103,22 @@ typedef struct {
     ConnectionManager conns;    /* Connection and epoll management */
     SocketStats stats;         /* Performance and activity statistics */
     pthread_t thread_id;       /* ID of thread managing this socket */
+    int socket_fd;
     int status;
 } Socket;
+
+/*
+ * Main router socket structure
+ * Handles initial connections and routing
+ */
+typedef struct {
+    SocketConfig config;         /* Socket configuration parameters */
+    int socket_fd;              /* Main socket file descriptor */
+    int port;                  /* Router port number */
+    int status;               /* Socket status */
+    unsigned long connections_handled;  /* Total connections processed */
+} RouterSocket;
+
 
 /* Function declarations */
 
@@ -117,12 +136,15 @@ SocketConfig create_default_socket_config(void);
  */
 Socket create_socket(const SocketInitInfo);
 
+RouterSocket create_router_socket(const SocketConfig config, int port);
 /*
 * Start the socket to be able to be accessed
 * @param socket the created socket held by the socket pool
 * @return the return value for error notification
 */
 int start_socket(Socket* socket);
+
+int start_main_socket(RouterSocket* router_socket);
 
 /*
  * Clean up and free a socket

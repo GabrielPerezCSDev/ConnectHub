@@ -23,9 +23,10 @@ typedef struct {
 
 typedef struct{
     RouterConfig config;
-    int active_ports[NUMBER_OF_USERS]; //used to track port usage (also implicitly conccurent users)
+    int active_ports[NUMBER_OF_USERS]; //used to track port usage (also implicitly concurent users)
     SocketPool* socket_pool; //the socket pool for the router
     int num_buckets;
+    RouterSocket socket;
 } Router;
 
 /*

@@ -77,6 +77,10 @@ int start_socketpool(SocketPool* socket_pool) {
 
     return 1;
 }
+
+int get_socketpool_status(SocketPool* socket_pool){
+    return socket_pool->status;
+}
 /*
 int delete_socketpool(SocketPool* socket_pool) {
     if (!socket_pool) return -1;

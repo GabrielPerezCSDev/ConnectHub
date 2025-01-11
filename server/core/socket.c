@@ -137,11 +137,77 @@ return socket;
 
 }
 
+RouterSocket create_router_socket(const SocketConfig config, int port) {
+    RouterSocket router_socket = {0};  // Zero initialize all fields
+    
+    // Set initial values
+    router_socket.config = config;
+    router_socket.socket_fd = -1;      // Not started yet
+    router_socket.port = port;
+    router_socket.status = SOCKET_STATUS_UNUSED;
+    router_socket.connections_handled = 0;
+
+    return router_socket;
+}
 
 int start_socket(Socket* socket){
     if(!socket) return -1;
+    //create the socket fd 
+
     for(int i = 0; i < socket->ports.port_capacity;i++){
         printf("Starting the port %d\n", socket->ports.port_numbers[i]);
     }
+    return 1;
+}
+
+int start_main_socket(RouterSocket* router_socket) {
+   if (!router_socket) return -1;
+
+   // Create socket
+   router_socket->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+   if (router_socket->socket_fd < 0) {
+       router_socket->status = SOCKET_STATUS_ERROR;
+       return -1;
+   }
+
+   // Set socket options
+   int opt = 1;
+   if (setsockopt(router_socket->socket_fd, SOL_SOCKET, SO_REUSEADDR, 
+                  &opt, sizeof(opt)) < 0) {
+       close(router_socket->socket_fd);
+       router_socket->status = SOCKET_STATUS_ERROR;
+       return -1;
+   }
+
+   // Prepare address structure
+   struct sockaddr_in addr;
+   memset(&addr, 0, sizeof(addr));
+   addr.sin_family = AF_INET;
+   addr.sin_addr.s_addr = INADDR_ANY;  // Accept connections on any interface
+   addr.sin_port = htons(router_socket->port);
+
+   // Bind socket to port
+   if (bind(router_socket->socket_fd, (struct sockaddr*)&addr, 
+            sizeof(addr)) < 0) {
+       close(router_socket->socket_fd);
+       router_socket->status = SOCKET_STATUS_ERROR;
+       return -1;
+   }
+
+   // Start listening
+   if (listen(router_socket->socket_fd, router_socket->config.backlog) < 0) {
+       close(router_socket->socket_fd);
+       router_socket->status = SOCKET_STATUS_ERROR;
+       return -1;
+   }
+
+   router_socket->status = SOCKET_STATUS_ACTIVE;
+   return 1;
+}
+
+
+int destroy_socket(Socket* socket){
+    //TODO destroy the socket
+
     return 1;
 }

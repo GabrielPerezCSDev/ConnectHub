@@ -25,6 +25,18 @@ Router* create_router(){
         router->active_ports[i] = 0;
     }
 
+    // First create default socket config
+    SocketConfig socket_config = create_default_socket_config();
+
+    // Create router socket
+    RouterSocket main_socket = create_router_socket(
+        socket_config,
+        router->config.router_port  // or MAIN_SOCKET_PORT
+    );
+
+    router->socket = main_socket;
+
+    
     //generate the SocketBuckets 
     int num_buckets = ceil((double)  NUMBER_OF_USERS / (SOCKETS_PER_BUCKET * USERS_PER_SOCKET));
     router->num_buckets = num_buckets;
@@ -54,6 +66,9 @@ Router* create_router(){
 int start_router(Router* router){
     printf("\n\n Starting the router \n");
     if (!router) return -1;
+
+    printf("Start the main socket");
+    
 
     for(int i = 0; i < router->num_buckets; i++){
         printf("\nStarting bucket %d:\n", (i+1));
