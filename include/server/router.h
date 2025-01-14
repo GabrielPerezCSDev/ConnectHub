@@ -5,7 +5,7 @@
 #include "socket.h"
 #include "socket_pool.h"
 #include <pthread.h>
-
+#include"db/user_db.h"
 
 #define NUMBER_OF_USERS 1000
 #define SOCKETS_PER_BUCKET 5
@@ -27,17 +27,21 @@ typedef struct{
     SocketPool* socket_pool; //the socket pool for the router
     int num_buckets;
     RouterSocket socket;
+    pthread_t main_socket_thread;
+    UserDB* user_db;
 } Router;
 
 /*
 * Create router and populate the fields
 */
-Router* create_router();
+Router* create_router(UserDB* user_db);
 
 /*
 * Start the router (enable socket pools and sockets)
 */
 int start_router(Router* router);
+
+void* router_socket_thread(Router* router);
 
 /*
 * New connection for the router so assign it if possible to a socket (not in use) 
@@ -46,7 +50,10 @@ int handle_new_connection(Router* router);
 
 int remove_connection(Router* router);
 
-void delete_router(Router* router);
+void shut_down_router(Router* router);
 
+// Authentication related functions
+int handle_authentication(Router* router, int client_fd, const char* username, const char* password);
+int handle_registration(Router* router, int client_fd, const char* username, const char* password);
 
 #endif /* ROUTER_H*/

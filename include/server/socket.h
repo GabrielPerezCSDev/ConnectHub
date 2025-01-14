@@ -3,11 +3,14 @@
  * Structures for individual socket configuration and state
  */
 #include <time.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <string.h>  
-#include <unistd.h> 
+#include <sys/socket.h>     // For socket(), bind(), listen(), accept()
+#include <netinet/in.h>     // For struct sockaddr_in
+#include <string.h>         // For memset()
+#include <unistd.h>         // For close()
+#include <fcntl.h>          // For fcntl() - setting non-blocking mode
+#include <sys/epoll.h>      // For epoll_create1(), epoll_ctl(), epoll_wait()
+#include <pthread.h>        // For pthread_create() and thread handling
+#include <errno.h>          // For errno and error constants
 
 #ifndef SOCKET_H
 #define SOCKET_H
@@ -114,6 +117,9 @@ typedef struct {
 typedef struct {
     SocketConfig config;         /* Socket configuration parameters */
     int socket_fd;              /* Main socket file descriptor */
+    int epoll_fd;
+    int thread_id;
+    time_t last_used;
     int port;                  /* Router port number */
     int status;               /* Socket status */
     unsigned long connections_handled;  /* Total connections processed */
@@ -142,21 +148,25 @@ RouterSocket create_router_socket(const SocketConfig config, int port);
 * @param socket the created socket held by the socket pool
 * @return the return value for error notification
 */
-int start_socket(Socket* socket);
+int start_socket(Socket* sock);
 
-int start_main_socket(RouterSocket* router_socket);
+/*
+ * Start the main router socket
+ * Returns -1 on error, 1 on success
+ */
+int start_router_socket(RouterSocket* router_socket);
 
 /*
  * Clean up and free a socket
  * @param socket Socket to destroy
  */
-int destroy_socket(Socket* socket);
+int destroy_socket(Socket* sock);
 
 /*
  * Update socket activity timestamp
  * @param socket Socket to update
  */
-void update_socket_activity(Socket* socket);
+void update_socket_activity(Socket* sock);
 
 /*
  * Update socket statistics
@@ -164,6 +174,6 @@ void update_socket_activity(Socket* socket);
  * @param bytes_sent Number of bytes sent
  * @param bytes_received Number of bytes received
  */
-void update_socket_stats(Socket* socket, unsigned long bytes_sent, unsigned long bytes_received);
+void update_socket_stats(Socket* sock, unsigned long bytes_sent, unsigned long bytes_received);
 
 #endif /* SOCKET_H */
