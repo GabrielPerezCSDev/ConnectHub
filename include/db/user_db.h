@@ -26,8 +26,8 @@ typedef struct {
     sqlite3* db;                 // SQLite database connection
     sqlite3_stmt* auth_stmt;     // Prepared statement for authentication
     sqlite3_stmt* create_stmt;   // Prepared statement for user creation
-    sqlite3_stmt* update_stmt;   // Prepared statement for updates
-    sqlite3_stmt* fetch_stmt;    // Prepared statement for fetching user data
+    sqlite3_stmt* get_user_stmt; // For fetching user data
+    sqlite3_stmt* update_user_stmt; // For updating user data
 } UserDB;
 
 // Database initialization and cleanup
