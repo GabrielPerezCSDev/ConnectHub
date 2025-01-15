@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <bcrypt.h> 
+#include <bcrypt/bcrypt.h> 
 
 // Simple password hashing (in practice, use a proper hashing library like bcrypt)
 static void hash_password(const char* password, char* hash_out) {
