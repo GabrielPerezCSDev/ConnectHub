@@ -34,25 +34,18 @@ SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_p
     for(int i = 0; i < num_sockets; i++) {
         printf("creating socket #%d", (i+1));
         
-        int* ports = (int*) malloc(sizeof(int) * users_per_socket);
-        printf(" ports : {");
-        for(int j = 0; j < users_per_socket; j++){
-            ports[j] = port;
-            port++;
-            printf("%d ", port);
-        }
+        
         SocketInitInfo init_info = {
             .config = scf,
-            .port_numbers = ports,
-            .port_count = users_per_socket,
-            .max_connections = users_per_socket  // One connection per port
+            .port_number = port,
+            .max_connections = users_per_socket 
         };
         Socket socket = create_socket(init_info);
         printf("}\n\n");
         if (socket.status == SOCKET_STATUS_ERROR) {
             // Cleanup and return NULL
             for(int z = 0; z < i; z++) {
-                //destroy_socket(&pool->sockets[j]);
+                destroy_socket(&pool->sockets[z]);
             }
             free(pool->sockets);
             free(pool);
@@ -60,6 +53,7 @@ SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_p
         }
 
         pool->sockets[i] = socket;
+        port++;
     }
 
     return pool;
@@ -81,7 +75,7 @@ int start_socketpool(SocketPool* socket_pool) {
 int get_socketpool_status(SocketPool* socket_pool){
     return socket_pool->status;
 }
-/*
+
 int delete_socketpool(SocketPool* socket_pool) {
     if (!socket_pool) return -1;
 
@@ -98,6 +92,7 @@ int delete_socketpool(SocketPool* socket_pool) {
     return 0;
 }
 
+/*
 int get_socketpool_status(SocketPool* socket_pool){
     return socket_pool->status;
 }

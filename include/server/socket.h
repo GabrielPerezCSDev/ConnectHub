@@ -25,11 +25,6 @@
 #define SOCKET_STATUS_ACTIVE 1
 #define SOCKET_STATUS_ERROR  2
 
-#define PORT_STATUS_FREE      0
-#define PORT_STATUS_ACTIVE    1
-#define PORT_STATUS_ERROR     2
-
-#define MAX_CONNECTIONS_PER_PORT  1    /* One connection per port */
 #define MAX_BACKLOG_SIZE          5    /* Listen queue size */
 #define MAX_EVENTS               32    /* Max epoll events to handle at once */
 
@@ -43,6 +38,7 @@
 #define SOCKET_ERROR_EPOLL    1
 #define SOCKET_ERROR_BIND     2
 #define SOCKET_ERROR_ACCEPT   3
+#define SOCKET_ERROR_LISTEN   4
 
 /*
  * Configuration for socket creation and behavior
@@ -56,25 +52,20 @@ typedef struct {
     int keep_alive;        /* Enable SO_KEEPALIVE option */
 } SocketConfig;
 
-/*
- * Manages multiple ports for a single socket
- * Handles port allocation and status tracking
- */
 typedef struct {
-    int* port_numbers;      /* Array of assigned port numbers */
-    int* port_status;       /* Status flags for each port (active/inactive/error) */
-    int port_count;         /* Current number of active ports */
-    int port_capacity;      /* Maximum number of ports this socket can handle */
-} PortManager;
-
+    uint32_t session_key;  // Random 32-bit session identifier
+    int fd;                // Connection file descriptor
+    time_t last_active;    // Last activity timestamp
+} ClientConnection;
 /*
  * Manages multiple client connections
  * Handles epoll and connection tracking
  */
 typedef struct {
     int epoll_fd;          /* epoll instance file descriptor */
-    int* client_fds;       /* Array of connected client file descriptors */
+    ClientConnection* clients;  /* Array of client connections */
     int max_connections;   /* Maximum allowed concurrent connections */
+    int current_connections; /* Current number of active connections */
 } ConnectionManager;
 
 /*
@@ -90,8 +81,7 @@ typedef struct {
 
 typedef struct {
     SocketConfig config;
-    int* port_numbers;
-    int port_count;
+    int port_number;
     int max_connections;
 }SocketInitInfo;
 
@@ -102,12 +92,13 @@ typedef struct {
  */
 typedef struct {
     SocketConfig config;         /* Socket configuration parameters */
-    PortManager ports;          /* Port management and tracking */
     ConnectionManager conns;    /* Connection and epoll management */
     SocketStats stats;         /* Performance and activity statistics */
     pthread_t thread_id;       /* ID of thread managing this socket */
+    int port;
     int socket_fd;
     int status;
+    int error;
 } Socket;
 
 /*

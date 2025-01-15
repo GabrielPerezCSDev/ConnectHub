@@ -36,73 +36,41 @@ SocketConfig create_default_socket_config(void){
 }
 
 Socket create_socket(const SocketInitInfo socket_init_info){
-    
-    //Copy of port numbers array for ownership
-    int* port_numbers = (int*) malloc(sizeof(int) * socket_init_info.port_count);
-    if (!port_numbers) {
-        // Handle error
-        Socket error_socket = {0};  // Zero initialize all fields
-        error_socket.status = SOCKET_STATUS_ERROR;
-        return error_socket /* error socket */;
-    }
-    memcpy(port_numbers, socket_init_info.port_numbers, sizeof(int) * socket_init_info.port_count);
-    
-    //PortManager defintion 
-    int* port_status = (int*) malloc(sizeof(int) * socket_init_info.port_count);
-    
-    if (!port_status) {
-        free(port_numbers);
+    /*
+    * Client Connection default
+    */
+    ClientConnection* clients = (ClientConnection*) malloc(sizeof(ClientConnection) * socket_init_info.max_connections);
+    if(!clients){
+        printf("Unsuccessful allocation of memory for clients\n");
         Socket error_socket = {0};  // Zero initialize all fields
         error_socket.status = SOCKET_STATUS_ERROR;
         return error_socket /* error socket */;
     }
 
-    for(int i = 0; i < socket_init_info.port_count;i++){
-        port_status[i] = SOCKET_STATUS_UNUSED;
+    for(int i = 0; i < socket_init_info.max_connections; i++){
+        clients[i].fd = -1;                 // No file descriptor
+        clients[i].session_key = 0;         // No session key
+        clients[i].last_active = 0;         // No activity
     }
-    
-    PortManager pmgr = {
-        socket_init_info.port_numbers,
-        port_status,
-        0,
-        socket_init_info.port_count,
-    };
-
     /*
     * Connection manager intialization
     */
 
-   int* client_fds = (int*) malloc(sizeof(int) * socket_init_info.max_connections);
-    if (!client_fds) {
-        // Handle error
-        free(port_numbers);
-        free(port_status);
-        Socket error_socket = {0};  // Zero initialize all fields
-        error_socket.status = SOCKET_STATUS_ERROR;
-        return error_socket /* error socket */;
-    }
-    
-    // Initialize all client FDs to -1 (indicating no connection)
-    for(int i = 0; i < socket_init_info.max_connections; i++) {
-        client_fds[i] = -1;
-    }
-
     ConnectionManager cmgr = {
         -1,                              // epoll_fd (-1 until started)
-        client_fds,                      // Array for client FDs
-        socket_init_info.max_connections // Max connections allowed
+        clients,                      // Array for client FDs
+        socket_init_info.max_connections, // Max connections allowed
+        0,                              // Currently no established connections
     };
 
     // Allocate arrays based on port count
-unsigned long* bytes_sent = (unsigned long*) malloc(sizeof(unsigned long) * socket_init_info.port_count);
-unsigned long* bytes_received = (unsigned long*) malloc(sizeof(unsigned long) * socket_init_info.port_count);
-time_t* last_active = (time_t*) malloc(sizeof(time_t) * socket_init_info.port_count);
+unsigned long* bytes_sent = (unsigned long*) malloc(sizeof(unsigned long) * socket_init_info.max_connections);
+unsigned long* bytes_received = (unsigned long*) malloc(sizeof(unsigned long) * socket_init_info.max_connections);
+time_t* last_active = (time_t*) malloc(sizeof(time_t) * socket_init_info.max_connections);
 
 if (!bytes_sent || !bytes_received || !last_active) {
     // Handle error - free any successful allocations
-    free(port_numbers);
-    free(port_status);
-    free(client_fds);
+    free(clients);
     free(bytes_sent);
     free(bytes_received);
     free(last_active);
@@ -112,7 +80,7 @@ if (!bytes_sent || !bytes_received || !last_active) {
 }
 
 // Initialize all statistics to 0/inactive
-for(int i = 0; i < socket_init_info.port_count; i++) {
+for(int i = 0; i < socket_init_info.max_connections; i++) {
     bytes_sent[i] = 0;
     bytes_received[i] = 0;
     last_active[i] = 0;  // 0 timestamp indicates never active
@@ -126,13 +94,14 @@ SocketStats stats = {
 };
 
 Socket socket = {
-    socket_init_info.config,   // config
-    pmgr,                      // ports
+    socket_init_info.config,   // config                    
     cmgr,                      // conns
     stats,                     // stats
     0,                         // thread_id
+    socket_init_info.port_number,
     -1,                        // socket_fd
-    SOCKET_STATUS_UNUSED       // status
+    SOCKET_STATUS_UNUSED,       // status
+    SOCKET_ERROR_NONE
 };
 
 return socket;
@@ -184,29 +153,27 @@ int start_socket(Socket* sock) {
         return -1;
     }
 
-    // Initialize each port
-    for (int i = 0; i < sock->ports.port_capacity; i++) {
-        printf("Starting port %d\n", sock->ports.port_numbers[i]);
-        
+    
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
-        addr.sin_port = htons(sock->ports.port_numbers[i]);
-
+        addr.sin_port = htons(sock->port);
         // Bind socket to this port
         if (bind(sock->socket_fd, (struct sockaddr*)&addr, 
                  sizeof(addr)) < 0) {
-            printf("Failed to bind port %d\n", sock->ports.port_numbers[i]);
-            sock->ports.port_status[i] = PORT_STATUS_ERROR;
-            continue;
+            printf("Failed to bind port %d\n", sock->port);
+            sock->status = SOCKET_STATUS_ERROR;
+            sock->error = SOCKET_ERROR_BIND;
+            return -1;
         }
 
         // Start listening on this port
         if (listen(sock->socket_fd, sock->config.backlog) < 0) {
-            printf("Failed to listen on port %d\n", sock->ports.port_numbers[i]);
-            sock->ports.port_status[i] = PORT_STATUS_ERROR;
-            continue;
+            printf("Failed to listen on port %d\n", sock->port);
+            sock->status = SOCKET_STATUS_ERROR;
+            sock->error = SOCKET_ERROR_LISTEN;
+            return -1;
         }
 
         // Add to epoll
@@ -215,31 +182,22 @@ int start_socket(Socket* sock) {
         ev.data.fd = sock->socket_fd;
         if (epoll_ctl(sock->conns.epoll_fd, EPOLL_CTL_ADD, 
                       sock->socket_fd, &ev) < 0) {
-            printf("Failed to add port %d to epoll\n", sock->ports.port_numbers[i]);
-            sock->ports.port_status[i] = PORT_STATUS_ERROR;
-            continue;
+            printf("Failed to add socket at port %d to epoll\n", sock->port);
+            sock->status = SOCKET_STATUS_ERROR;
+            sock->error = SOCKET_ERROR_EPOLL;
+            return -1;
         }
 
-        sock->ports.port_status[i] = PORT_STATUS_ACTIVE;
-        printf("Successfully started port %d\n", sock->ports.port_numbers[i]);
-    }
-
+        printf("Successfully started socket at port %d\n", sock->port);
     // Check if any ports were successfully started
-    int active_ports = 0;
-    for (int i = 0; i < sock->ports.port_capacity; i++) {
-        if (sock->ports.port_status[i] == PORT_STATUS_ACTIVE) {
-            active_ports++;
-        }
-    }
-
-    if (active_ports == 0) {
-        printf("No ports were successfully started\n");
+    
+    if (sock->error != 0) {
+        printf("Faulty socket\n");
         close(sock->conns.epoll_fd);
         close(sock->socket_fd);
         sock->status = SOCKET_STATUS_ERROR;
         return -1;
     }
-
     sock->status = SOCKET_STATUS_ACTIVE;
     return 1;
 }
@@ -320,8 +278,41 @@ int start_router_socket(RouterSocket* router_socket) {
 }
 
 
-int destroy_socket(Socket* sock){
-    //TODO destroy the socket
+int destroy_socket(Socket* sock) {
+    if (!sock) return -1;
 
+    printf("Destroying socket on port %d\n", sock->port);
+
+    // Close epoll file descriptor
+    if (sock->conns.epoll_fd >= 0) {
+        close(sock->conns.epoll_fd);
+        sock->conns.epoll_fd = -1;
+    }
+
+    // Close main socket file descriptor
+    if (sock->socket_fd >= 0) {
+        close(sock->socket_fd);
+        sock->socket_fd = -1;
+    }
+
+    // Close all client connections and free resources
+    if (sock->conns.clients) {
+        // Close any open client connections
+        for (int i = 0; i < sock->conns.max_connections; i++) {
+            if (sock->conns.clients[i].fd >= 0) {
+                close(sock->conns.clients[i].fd);
+            }
+        }
+        // Free the clients array
+        free(sock->conns.clients);
+        sock->conns.clients = NULL;
+    }
+
+    // Reset status flags
+    sock->status = SOCKET_STATUS_UNUSED;
+    sock->error = SOCKET_ERROR_NONE;
+    sock->conns.current_connections = 0;
+
+    printf("Socket destroyed successfully\n");
     return 1;
 }

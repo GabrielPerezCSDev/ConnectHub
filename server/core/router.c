@@ -248,8 +248,7 @@ void shut_down_router(Router* router) {
     // Shutdown all socket pools in each bucket
     for (int i = 0; i < router->num_buckets; i++) {
         printf("Shutting down socket pool bucket %d\n", i + 1);
-        // TODO: Implement socket_pool shutdown function
-        // shut_down_socket_pool(&router->socket_pool[i]);
+        delete_socketpool(&router->socket_pool[i]);
     }
 
     // Clear active ports tracking
