@@ -41,7 +41,7 @@ SocketPool* create_socketpool(int num_sockets, int users_per_socket, int start_p
             .max_connections = users_per_socket 
         };
         Socket socket = create_socket(init_info);
-        printf("}\n\n");
+        printf("\n\n");
         if (socket.status == SOCKET_STATUS_ERROR) {
             // Cleanup and return NULL
             for(int z = 0; z < i; z++) {
@@ -92,6 +92,18 @@ int delete_socketpool(SocketPool* socket_pool) {
     return 0;
 }
 
+int find_open_socket(SocketPool* socket_pool){
+    int port_number = -1;
+    for(int i = 0; i < socket_pool->total_sockets; i++){
+        //check if socket is full 
+        if(is_socket_full(&socket_pool->sockets[i]) != -1){
+            port_number = socket_pool->sockets[i].port;
+            printf("Found an open socket at port %d\n", port_number);
+            return port_number;
+        }
+    }
+    return port_number;
+}
 /*
 int get_socketpool_status(SocketPool* socket_pool){
     return socket_pool->status;

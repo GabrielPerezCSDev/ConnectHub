@@ -31,6 +31,7 @@ void* socket_pool_thread(void* arg);
 
 int delete_socketpool(SocketPool* socket_pool);
 
+int find_open_socket(SocketPool* socket_pool);
 /*
 //delete a socket pool
 int delete_socketpool(SocketPool* socket_pool);

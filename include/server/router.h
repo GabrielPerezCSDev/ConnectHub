@@ -5,11 +5,12 @@
 #include "socket.h"
 #include "socket_pool.h"
 #include <pthread.h>
-#include"db/user_db.h"
+#include "db/user_db.h"
+#include "util/user_cache.h"
 
 #define NUMBER_OF_USERS 10
 #define SOCKETS_PER_BUCKET 2
-#define USERS_PER_SOCKET 1
+#define USERS_PER_SOCKET 5
 #define MAIN_SOCKET_PORT 8080
 #define USER_SOCKET_PORT_START 8081
 
@@ -23,12 +24,13 @@ typedef struct {
 
 typedef struct{
     RouterConfig config;
-    int active_ports[NUMBER_OF_USERS]; //used to track port usage (also implicitly concurent users)
+    uint8_t* bucket_status;  // Each bit represents a bucket's full status
     SocketPool* socket_pool; //the socket pool for the router
     int num_buckets;
     RouterSocket socket;
     pthread_t main_socket_thread;
     UserDB* user_db;
+    UserCache* user_cache;
 } Router;
 
 /*
@@ -42,13 +44,12 @@ Router* create_router(UserDB* user_db);
 int start_router(Router* router);
 
 void* router_socket_thread(Router* router);
-
 /*
 * New connection for the router so assign it if possible to a socket (not in use) 
 */
-int handle_new_connection(Router* router);
+int handle_new_connection(Router* router, const char *username);
 
-int remove_connection(Router* router);
+int remove_connection(Router* router, const char *username);
 
 void shut_down_router(Router* router);
 

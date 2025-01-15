@@ -167,4 +167,6 @@ void update_socket_activity(Socket* sock);
  */
 void update_socket_stats(Socket* sock, unsigned long bytes_sent, unsigned long bytes_received);
 
+int is_socket_full(Socket* sock);
+
 #endif /* SOCKET_H */

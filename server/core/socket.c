@@ -279,6 +279,7 @@ int start_router_socket(RouterSocket* router_socket) {
 
 
 int destroy_socket(Socket* sock) {
+
     if (!sock) return -1;
 
     printf("Destroying socket on port %d\n", sock->port);
@@ -315,4 +316,12 @@ int destroy_socket(Socket* sock) {
 
     printf("Socket destroyed successfully\n");
     return 1;
+}
+
+int is_socket_full(Socket* sock){
+    if(sock->conns.current_connections < sock->conns.max_connections){
+        return 1;
+    }
+
+    return -1;
 }
