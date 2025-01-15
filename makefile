@@ -3,7 +3,7 @@ CFLAGS=-I./include -Wall -Wextra
 SRCDIR=server/core
 DBDIR=server/db
 BINDIR=bin
-LIBS=-lsqlite3
+LIBS=-lsqlite3 -lbcrypt
 
 # Source files
 SRCS=$(SRCDIR)/server.c $(SRCDIR)/router.c $(SRCDIR)/socket_pool.c $(SRCDIR)/socket.c
