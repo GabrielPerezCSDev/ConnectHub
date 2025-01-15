@@ -7,9 +7,9 @@
 #include <pthread.h>
 #include"db/user_db.h"
 
-#define NUMBER_OF_USERS 1000
-#define SOCKETS_PER_BUCKET 5
-#define USERS_PER_SOCKET 10
+#define NUMBER_OF_USERS 10
+#define SOCKETS_PER_BUCKET 2
+#define USERS_PER_SOCKET 1
 #define MAIN_SOCKET_PORT 8080
 #define USER_SOCKET_PORT_START 8081
 
