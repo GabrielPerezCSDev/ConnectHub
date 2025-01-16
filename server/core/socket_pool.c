@@ -92,16 +92,30 @@ int delete_socketpool(SocketPool* socket_pool) {
     return 0;
 }
 
-int find_open_socket(SocketPool* socket_pool){
+int find_open_socket(SocketPool* socket_pool, uint32_t session_key) {
     int port_number = -1;
-    for(int i = 0; i < socket_pool->total_sockets; i++){
+    
+    for(int i = 0; i < socket_pool->total_sockets; i++) {
+        Socket* current_socket = &socket_pool->sockets[i];
+        
         //check if socket is full 
-        if(is_socket_full(&socket_pool->sockets[i]) != -1){
-            port_number = socket_pool->sockets[i].port;
+        if(is_socket_full(current_socket) != -1) {
+            port_number = current_socket->port;
             printf("Found an open socket at port %d\n", port_number);
+            
+            // Add session key to socket's client tracking
+            for (int j = 0; j < current_socket->conns.max_connections; j++) {
+                if (current_socket->conns.clients[j].fd == -1) {
+                    current_socket->conns.clients[j].session_key = session_key;
+                    printf("Added session key %u to socket at port %d\n", 
+                           session_key, port_number);
+                    break;
+                }
+            }
             return port_number;
         }
     }
+    
     return port_number;
 }
 /*

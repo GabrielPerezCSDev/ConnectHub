@@ -142,7 +142,7 @@ int assign_user_socket(Router *router, uint32_t session_key)
         return -1;
     }
     // After open bucket found then delegate socket assignment to the socket pool bucket
-    int port_number = find_open_socket(&router->socket_pool[open_index]);
+    int port_number = find_open_socket(&router->socket_pool[open_index], session_key);
     return port_number;
 }
 
@@ -426,7 +426,6 @@ int handle_new_connection(Router *router, const char *username)
         return -1;
     }
 
-    //add the user to the cache 
     add_user(router->user_cache, username, port_number, session_key);
     return 1;
 }

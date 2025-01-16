@@ -123,6 +123,113 @@ RouterSocket create_router_socket(const SocketConfig config, int port) {
     return router_socket;
 }
 
+void* socket_thread_function(void* arg) {
+    Socket* sock = (Socket*)arg;
+    struct epoll_event events[MAX_EVENTS];
+
+    while (sock->status == SOCKET_STATUS_ACTIVE) {
+        int nfds = epoll_wait(sock->conns.epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
+        
+        if (nfds < 0) {
+            if (errno == EINTR) continue;  
+            sock->status = SOCKET_STATUS_ERROR;
+            break;
+        }
+
+        for (int i = 0; i < nfds; i++) {
+            if (events[i].data.fd == sock->socket_fd) {
+                // Handle new connection
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+                
+                int client_fd = accept(sock->socket_fd, 
+                                     (struct sockaddr*)&client_addr, 
+                                     &client_len);
+                
+                if (client_fd < 0) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        break;
+                    }
+                    continue;
+                }
+
+                // First message should contain session key
+                uint32_t received_key;
+                ssize_t bytes_read = read(client_fd, &received_key, sizeof(uint32_t));
+                if (bytes_read == sizeof(uint32_t)) {
+                    // Find matching session key in our clients array
+                    int valid = 0;
+                    int slot = -1;
+                    for (int j = 0; j < sock->conns.max_connections; j++) {
+                        if (sock->conns.clients[j].session_key == received_key && 
+                            sock->conns.clients[j].fd == -1) {
+                            valid = 1;
+                            slot = j;
+                            break;
+                        }
+                    }
+
+                    if (valid) {
+                        // Add to epoll
+                        struct epoll_event ev;
+                        ev.events = EPOLLIN;
+                        ev.data.fd = client_fd;
+                        if (epoll_ctl(sock->conns.epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
+                            close(client_fd);
+                            continue;
+                        }
+
+                        // Update client slot
+                        sock->conns.clients[slot].fd = client_fd;
+                        sock->conns.clients[slot].last_active = time(NULL);
+                        sock->conns.current_connections++;
+
+                        char response[] = "Connection accepted\n";
+                        write(client_fd, response, strlen(response));
+                        printf("Client connected with valid session key on port %d\n", sock->port);
+                    } else {
+                        char response[] = "Invalid session key\n";
+                        write(client_fd, response, strlen(response));
+                        close(client_fd);
+                    }
+                }
+            } else {
+                // Handle messages from existing clients
+                int client_fd = events[i].data.fd;
+                char buffer[MAX_MESSAGE_SIZE];
+                
+                ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+                if (bytes_read > 0) {
+                    buffer[bytes_read] = '\0';
+                    // Update last active time
+                    for (int j = 0; j < sock->conns.max_connections; j++) {
+                        if (sock->conns.clients[j].fd == client_fd) {
+                            sock->conns.clients[j].last_active = time(NULL);
+                            break;
+                        }
+                    }
+                    
+                    // Echo message back for now
+                    write(client_fd, buffer, bytes_read);
+                } else if (bytes_read == 0 || (bytes_read < 0 && errno != EAGAIN)) {
+                    // Client disconnected or error
+                    for (int j = 0; j < sock->conns.max_connections; j++) {
+                        if (sock->conns.clients[j].fd == client_fd) {
+                            sock->conns.clients[j].fd = -1;
+                            sock->conns.current_connections--;
+                            break;
+                        }
+                    }
+                    epoll_ctl(sock->conns.epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
 int start_socket(Socket* sock) {
     if (!sock) return -1;
 
@@ -199,6 +306,18 @@ int start_socket(Socket* sock) {
         return -1;
     }
     sock->status = SOCKET_STATUS_ACTIVE;
+
+    // Create the socket thread
+    if (pthread_create(&sock->thread_id, NULL, 
+                      socket_thread_function, sock) != 0) {
+        printf("Failed to create socket thread\n");
+        close(sock->conns.epoll_fd);
+        close(sock->socket_fd);
+        sock->status = SOCKET_STATUS_ERROR;
+        return -1;
+    }
+
+
     return 1;
 }
 
