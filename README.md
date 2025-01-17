@@ -1,4 +1,4 @@
-# Multiplexd Server
+# ConnectHub
 
 A lightweight multiplayer TCP server that manages multiple user connections through organized socket pools and provides user authentication.
 
@@ -110,7 +110,7 @@ For VM deployment:
 
 ## Connection Flow
 
-1. Client connects to router (port 8080)
+1. Client connects to router (MAIN_SOCKET_PORT)
 2. Client registers or authenticates through router socket
 3. Upon successful authentication:
    - Client receives assigned port number
