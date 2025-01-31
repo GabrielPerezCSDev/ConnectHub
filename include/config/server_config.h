@@ -2,6 +2,21 @@
 #ifndef SERVER_CONFIG_H
 #define SERVER_CONFIG_H
 
+/*
+ * Server Configuration Constants
+ * 
+ * IMPORTANT DEPENDENCIES:
+ * - MAX_MESSAGE_SIZE must be >= MIN_BUFFER_SIZE
+ * - USER_SOCKET_PORT_START must be > MAIN_SOCKET_PORT
+ * - SOCKETS_PER_BUCKET * USERS_PER_SOCKET must accommodate NUMBER_OF_USERS
+ *
+ * SHARED ERROR CODES:
+ * These error codes are used across multiple components and must remain consistent:
+ * - ERROR (-1): Universal error indicator
+ * - SOCKET_STATUS codes: Used in both socket.c and router.c
+ * - SOCKET_ERROR codes: Used across all socket operations
+ */
+
 /* Connection Limits */
 #define NUMBER_OF_USERS 10
 #define SOCKETS_PER_BUCKET 2

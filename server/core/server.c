@@ -1,6 +1,7 @@
 #include "server/router.h"
 #include "db/user_db.h"
 #include "db/db_config.h"
+#include "config/config_validator.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -14,6 +15,15 @@ static void ensure_data_directory() {
 }
 
 int main() {
+    //ensure user configurations are legit 
+    ConfigValidationResult result = validate_server_config();
+    if (result != CONFIG_VALID) {
+        fprintf(stderr, "Configuration validation failed: %s\n", 
+            get_config_error_message(result));
+        return 1;
+    }
+
+    print_server_config();
     // Ensure data directory exists
     ensure_data_directory();
 
