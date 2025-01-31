@@ -3,17 +3,43 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-uint32_t generate_session_key()
+typedef enum SessionKeyError
+{
+    SESSION_KEY_SUCCESS = 0,
+    SESSION_KEY_FILE_ERROR,
+    SESSION_KEY_READ_ERROR
+} SessionKeyError;
+
+struct SessionKeyResult
 {
     uint32_t key;
+    SessionKeyError error;
+};
+
+struct SessionKeyResult generate_session_key()
+{
+    struct SessionKeyResult result = {
+        0,
+        SESSION_KEY_SUCCESS};
+
     FILE *urandom = fopen("/dev/urandom", "r");
-    if (urandom)
+
+    if (!urandom)
     {
-        fread(&key, sizeof(uint32_t), 1, urandom);
-        fclose(urandom);
-        return key;
+        result.error = SESSION_KEY_FILE_ERROR;
+        return result;
     }
-    return 0; // Or handle error differently
+
+    size_t read_items = fread(&result.key, sizeof(uint32_t), 1, urandom);
+
+    if (read_items != 1)
+    {
+        result.error = SESSION_KEY_READ_ERROR;
+    }
+
+    fclose(urandom);
+
+    return result; // Or handle error differently
 }
 
 // Set bucket as full
@@ -44,15 +70,30 @@ void init_bucket_status(Router *router)
 Router *create_router(UserDB *user_db)
 {
     if (!user_db)
+    {
+        errno = EINVAL;
         return NULL;
+    }
     printf("creating the router \n");
-    Router *router = (Router *)malloc(sizeof(Router));
+    Router *router = (Router *)calloc(1, sizeof(Router));
+    if (!router)
+    {
+        errno = ENOMEM;
+    }
+
     router->user_db = user_db;
     if (router == NULL)
     {
         printf("Router allocation failed\n");
         return NULL;
     }
+
+    // clean slate for init
+    router->user_db = user_db;
+    router->num_buckets = 0;
+    router->bucket_status = NULL;
+    router->socket_pool = NULL;
+    router->user_cache = NULL;
 
     RouterConfig rcf = {
         NUMBER_OF_USERS,
@@ -127,23 +168,47 @@ Router *create_router(UserDB *user_db)
 
 int assign_user_socket(Router *router, uint32_t session_key)
 {
-
-    // Need to find an open bucket first
-    int open_index = -1;
-    for(int i = 0; i < router->num_buckets; i++){
-        if(!is_bucket_full(router, i)){
-            open_index = i;
-            break;
-        }
-    }
-
-    if(open_index == -1){
-        printf("Server is at capacity (no open buckets)");
+    if (!router)
+    {
+        errno = EINVAL;
         return -1;
     }
-    // After open bucket found then delegate socket assignment to the socket pool bucket
-    int port_number = find_open_socket(&router->socket_pool[open_index], session_key);
-    return port_number;
+
+    // Need to find an open bucket first
+    int retries = 3;
+    while (retries--)
+    {
+        int open_index = -1;
+        for (int i = 0; i < router->num_buckets; i++)
+        {
+            if (!is_bucket_full(router, i))
+            {
+                open_index = i;
+                break;
+            }
+        }
+
+        if (open_index == -1)
+        {
+            if (retries > 0)
+            {
+                // Wait briefly before retry
+                usleep(100000); // 100ms
+                continue;
+            }
+            errno = ENOSPC;
+            printf("Server is at capacity (no open buckets)");
+            return -1;
+        }
+
+        // After open bucket found then delegate socket assignment to the socket pool bucket
+        int port_number = find_open_socket(&router->socket_pool[open_index], session_key);
+        if (port_number > 0)
+        {
+            return port_number;
+        }
+    }
+    return -1;
 }
 
 int handle_authentication(Router *router, int client_fd, const char *username, const char *password)
@@ -152,31 +217,33 @@ int handle_authentication(Router *router, int client_fd, const char *username, c
         return -1;
 
     // First check if user is already logged in
-    if (has_user(router->user_cache, username)) {
+    if (has_user(router->user_cache, username))
+    {
         char response[256];
         int existing_port = get_user_port(router->user_cache, username);
         uint32_t session_key = get_user_session(router->user_cache, username);
-        snprintf(response, sizeof(response), 
-            "User already logged in\nPort: %d\nSession key: %u\n",
-            existing_port, session_key);
+        snprintf(response, sizeof(response),
+                 "User already logged in\nPort: %d\nSession key: %u\n",
+                 existing_port, session_key);
         write(client_fd, response, strlen(response));
-        
+
         return -1;
     }
 
     // If not logged in, authenticate credentials
     if (authenticate_user(router->user_db, username, password) == DB_SUCCESS)
     {
-        if(handle_new_connection(router, username) == 1) {
+        if (handle_new_connection(router, username) == 1)
+        {
             int new_port = get_user_port(router->user_cache, username);
             uint32_t session_key = get_user_session(router->user_cache, username);
-            
+
             char response[256];
-            snprintf(response, sizeof(response), 
-                "Authentication successful\nAssigned to port: %d\nSession key: %u\n",
-                new_port, session_key);
+            snprintf(response, sizeof(response),
+                     "Authentication successful\nAssigned to port: %d\nSession key: %u\n",
+                     new_port, session_key);
             write(client_fd, response, strlen(response));
-            
+
             printf("Successfully authenticated and handled new user to a socket\n");
             return 1;
         }
@@ -214,7 +281,16 @@ int handle_registration(Router *router, int client_fd, const char *username, con
 
 void *router_socket_thread(Router *router)
 {
+    if (!router)
+    {
+        errno = EINVAL;
+        return NULL;
+    }
+
     struct epoll_event events[MAX_EVENTS];
+    struct epoll_event ev;
+    int retry_count = 0;
+    const int MAX_RETRIES = 3;
 
     while (router->socket.status == SOCKET_STATUS_ACTIVE)
     {
@@ -224,9 +300,16 @@ void *router_socket_thread(Router *router)
         {
             if (errno == EINTR)
                 continue;
-            router->socket.status = SOCKET_STATUS_ERROR;
-            break;
+
+            retry_count++;
+            if (retry_count > MAX_RETRIES)
+            {
+                router->socket.status = SOCKET_STATUS_ERROR;
+                break;
+            }
+            continue;
         }
+        retry_count = 0;
 
         for (int i = 0; i < nfds; i++)
         {
@@ -319,6 +402,14 @@ void *router_socket_thread(Router *router)
         }
     }
 
+    for (int i = 0; i < MAX_EVENTS; i++)
+    {
+        if (events[i].data.fd > 0)
+        {
+            close(events[i].data.fd);
+        }
+    }
+
     return NULL;
 }
 
@@ -362,6 +453,32 @@ int start_router(Router *router)
     }
 
     return 1;
+}
+
+static void cleanup_router_partial(Router *router)
+{
+    if (!router)
+        return;
+
+    if (router->bucket_status)
+        free(router->bucket_status);
+    if (router->socket_pool)
+    {
+        for (int i = 0; i < router->num_buckets; i++)
+        {
+            if (router->socket_pool[i].sockets)
+            {
+                delete_socketpool(&router->socket_pool[i]);
+            }
+        }
+    }
+
+    free(router->socket_pool);
+
+    if (router->user_cache)
+        destroy_user_cache(router->user_cache);
+
+    free(router);
 }
 
 void shut_down_router(Router *router)
@@ -421,7 +538,8 @@ int handle_new_connection(Router *router, const char *username)
     uint32_t session_key = generate_session_key();
     printf("session key generated: %u\n", session_key);
     int port_number = assign_user_socket(router, session_key);
-    if(port_number == -1){
+    if (port_number == -1)
+    {
         printf("could not assign user a socket....");
         return -1;
     }
