@@ -3,13 +3,11 @@
 #define SOCKET_POOL_H
 
 #include "socket.h"
+#include "config/server_config.h"
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
-
-#define ERROR -1
-#define RUNNING 1
-#define STOPPED 0
 
 typedef struct {
     int max_users;

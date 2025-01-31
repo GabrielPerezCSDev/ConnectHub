@@ -14,6 +14,7 @@ A lightweight multiplayer TCP server that manages multiple user connections thro
 - Bcrypt Password Hashing
 - Session-based Authentication
 - Single-login Enforcement
+- Rate Limiting and Brute Force Protection
 
 ### Database
 - SQLite3 for User Management
@@ -66,6 +67,10 @@ USERS_PER_SOCKET = 5         // Users per socket
 MAIN_SOCKET_PORT = 8080      // Router port
 USER_SOCKET_PORT_START = 8081 // Starting port for user sockets
 ```
+### Security Implementation
+- Authentication rate limiting with exponential backoff
+- IP-based and username-based attempt tracking
+- Session key verification with error handling
 
 ## Features
 
@@ -174,12 +179,10 @@ Server output provides:
 ## Development Status
 
 Current implementation focuses on:
-- Basic connection handling
-- User authentication
 - Socket management
 - Session verification
 - Resource management
-- Error handling
+- Comprehensive error handling with recovery
 
 ## Future Enhancements Considered
 - Configuration file support

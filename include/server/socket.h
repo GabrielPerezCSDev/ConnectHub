@@ -12,33 +12,10 @@
 #include <pthread.h>        // For pthread_create() and thread handling
 #include <errno.h>          // For errno and error constants
 
+#include "config/server_config.h"
+
 #ifndef SOCKET_H
 #define SOCKET_H
-
-/* Socket configuration defaults */
-#define DEFAULT_RECV_BUFFER 8192   /* 8KB receive buffer */
-#define DEFAULT_SEND_BUFFER 8192   /* 8KB send buffer */
-#define DEFAULT_BACKLOG     1      /* Single connection backlog (dedicated sockets) */
-
-/* Socket status flags */
-#define SOCKET_STATUS_UNUSED 0
-#define SOCKET_STATUS_ACTIVE 1
-#define SOCKET_STATUS_ERROR  2
-
-#define MAX_BACKLOG_SIZE          5    /* Listen queue size */
-#define MAX_EVENTS               32    /* Max epoll events to handle at once */
-
-#define CONNECTION_TIMEOUT    100    /* Seconds before inactive connection dropped */
-#define EPOLL_TIMEOUT         100    /* MS to wait for epoll events */
-
-#define MAX_MESSAGE_SIZE    4096   /* Maximum message size */
-#define MIN_BUFFER_SIZE     1024   /* Minimum buffer allocation */
-
-#define SOCKET_ERROR_NONE     0
-#define SOCKET_ERROR_EPOLL    1
-#define SOCKET_ERROR_BIND     2
-#define SOCKET_ERROR_ACCEPT   3
-#define SOCKET_ERROR_LISTEN   4
 
 /*
  * Configuration for socket creation and behavior

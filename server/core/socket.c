@@ -5,18 +5,6 @@
 #include <string.h>
 #include <stdio.h>
 
-
-/* Socket configuration defaults */
-#define DEFAULT_RECV_BUFFER 8192   /* 8KB receive buffer */
-#define DEFAULT_SEND_BUFFER 8192   /* 8KB send buffer */
-#define DEFAULT_BACKLOG 1          /* Single connection backlog (dedicated sockets) */
-
-/* Socket status flags */
-#define SOCKET_STATUS_UNUSED 0
-#define SOCKET_STATUS_ACTIVE 1
-#define SOCKET_STATUS_ERROR  2
-
-
 /* Function declarations */
 
 /*

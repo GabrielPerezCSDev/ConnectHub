@@ -5,19 +5,10 @@
 #include "socket.h"
 #include "socket_pool.h"
 #include <pthread.h>
+#include "config/server_config.h"
 #include "db/user_db.h"
 #include "util/user_cache.h"
 #include "util/auth_cache.h"
-
-#define NUMBER_OF_USERS 10
-#define SOCKETS_PER_BUCKET 2
-#define USERS_PER_SOCKET 5
-#define MAIN_SOCKET_PORT 8080
-#define USER_SOCKET_PORT_START 8081
-
-#define MAX_ATTEMPTS 5       // Max failed attempts before blocking
-#define BLOCK_DURATION 300   // Block for 5 minutes (300 seconds)
-#define BACKOFF_MULTIPLIER 2 // Exponential backoff factor
 
 /**
  * @enum SessionKeyError
