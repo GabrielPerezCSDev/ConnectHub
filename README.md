@@ -60,6 +60,7 @@ A lightweight multiplayer TCP server that manages multiple user connections thro
 - Thread-safe user cache operations
 
 ### Network Configuration
+Default configuration values are defined in `include/config/server_config.h`:
 ```c
 NUMBER_OF_USERS = 10         // Maximum total users
 SOCKETS_PER_BUCKET = 2       // Sockets in each bucket
@@ -67,6 +68,14 @@ USERS_PER_SOCKET = 5         // Users per socket
 MAIN_SOCKET_PORT = 8080      // Router port
 USER_SOCKET_PORT_START = 8081 // Starting port for user sockets
 ```
+All configuration values undergo validation at server startup to ensure:
+- Valid port ranges and relationships
+- Appropriate buffer sizes
+- Safe timeout values
+- Secure rate limiting parameters
+
+The server will refuse to start if any configuration violates security or operational constraints. A configuration summary is displayed at startup showing all active settings.
+
 ### Security Implementation
 - Authentication rate limiting with exponential backoff
 - IP-based and username-based attempt tracking
@@ -129,10 +138,12 @@ For VM deployment:
 ```
 ├── include/           # Header files
 │   ├── db/           # Database headers
+|   ├── config/       # Configuration headers
 │   ├── server/       # Server component headers
 │   └── util/         # Utility headers
 ├── server/
 │   ├── core/         # Core server components
+|   ├── config/       # Configuration implementation
 │   ├── db/           # Database implementation
 │   └── util/         # Utility implementations
 ├── data/             # Database storage
