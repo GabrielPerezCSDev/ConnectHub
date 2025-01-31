@@ -7,12 +7,17 @@
 #include <pthread.h>
 #include "db/user_db.h"
 #include "util/user_cache.h"
+#include "util/auth_cache.h"
 
 #define NUMBER_OF_USERS 10
 #define SOCKETS_PER_BUCKET 2
 #define USERS_PER_SOCKET 5
 #define MAIN_SOCKET_PORT 8080
 #define USER_SOCKET_PORT_START 8081
+
+#define MAX_ATTEMPTS 5       // Max failed attempts before blocking
+#define BLOCK_DURATION 300   // Block for 5 minutes (300 seconds)
+#define BACKOFF_MULTIPLIER 2 // Exponential backoff factor
 
 /**
  * @enum SessionKeyError
@@ -42,6 +47,10 @@ struct SessionKeyResult
     SessionKeyError error;
 };
 
+typedef struct {
+    int client_fd;
+    char client_ip[INET_ADDRSTRLEN];
+} ClientConnectionData;
 /**
  * @struct RouterConfig
  * @brief Configuration settings for the router (uses the constants set in this header file)
@@ -69,6 +78,7 @@ typedef struct
     pthread_t main_socket_thread; // Thread handling main socket
     UserDB *user_db;              // User database reference
     UserCache *user_cache;        // Active user session cache
+    AuthCache *auth_cache;        // Tracks failed authentication attempts
 } Router;
 
 /**
@@ -91,7 +101,7 @@ int start_router(Router *router);
  * @param username Username of connecting user
  * @return 1 on success, -1 on failure
  */
-int handle_new_connection(Router* router, const char* username);
+int handle_new_connection(Router *router, const char *username);
 
 /**
  * @brief Removes a user connection from the router
@@ -99,13 +109,13 @@ int handle_new_connection(Router* router, const char* username);
  * @param username Username of user to remove
  * @return 1 on success, -1 on failure
  */
-int remove_connection(Router* router, const char* username);
+int remove_connection(Router *router, const char *username);
 
 /**
  * @brief Gracefully shuts down the router and frees resources
  * @param router Pointer to router to shut down
  */
-void shut_down_router(Router* router);
+void shut_down_router(Router *router);
 
 /**
  * @brief Handles user authentication requests
@@ -115,7 +125,7 @@ void shut_down_router(Router* router);
  * @param password Password to verify
  * @return 1 on success, -1 on failure
  */
-int handle_authentication(Router* router, int client_fd, const char* username, const char* password);
+int handle_authentication(Router *router, int client_fd, const char *username, const char *password, const char *ip);
 
 /**
  * @brief Handles new user registration requests
@@ -125,14 +135,12 @@ int handle_authentication(Router* router, int client_fd, const char* username, c
  * @param password Password to set
  * @return 1 on success, -1 on failure
  */
-int handle_registration(Router* router, int client_fd, const char* username, const char* password);
+int handle_registration(Router *router, int client_fd, const char *username, const char *password);
 
 /**
  * @brief Generates a new session key
  * @return SessionKeyResult containing key and error status
  */
 struct SessionKeyResult generate_session_key(void);
-
-
 
 #endif /* ROUTER_H*/

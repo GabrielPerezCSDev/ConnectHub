@@ -4,6 +4,16 @@
 #include <arpa/inet.h>
 
 
+static inline void cleanup_client_connection(ClientConnectionData *client_data, int epoll_fd)
+{
+    if (!client_data)
+        return;
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_data->client_fd, NULL);
+    close(client_data->client_fd);
+    free(client_data);
+}
+
+
 struct SessionKeyResult generate_session_key()
 {
     struct SessionKeyResult result = {
@@ -82,6 +92,7 @@ Router *create_router(UserDB *user_db)
     router->bucket_status = NULL;
     router->socket_pool = NULL;
     router->user_cache = NULL;
+    router->auth_cache = NULL;
 
     RouterConfig rcf = {
         NUMBER_OF_USERS,
@@ -145,10 +156,27 @@ Router *create_router(UserDB *user_db)
         printf("Finished generating bucket %d with the final port %d \n\n", (i + 1), port);
     }
 
+    // Create user cache
     router->user_cache = create_user_cache();
     if (!router->user_cache)
     {
-        printf("Error genererating user cache\n");
+        printf("Error generating user cache\n");
+        free(router->socket_pool);
+        free(router->bucket_status);
+        free(router);
+        return NULL;
+    }
+
+    // Create auth cache
+    router->auth_cache = create_auth_cache();
+    if (!router->auth_cache)
+    {
+        printf("Error generating authentication cache\n");
+        destroy_user_cache(router->user_cache);
+        free(router->socket_pool);
+        free(router->bucket_status);
+        free(router);
+        return NULL;
     }
 
     return router;
@@ -199,10 +227,19 @@ int assign_user_socket(Router *router, uint32_t session_key)
     return -1;
 }
 
-int handle_authentication(Router *router, int client_fd, const char *username, const char *password)
+int handle_authentication(Router *router, int client_fd, const char *username, const char *password, const char *ip)
 {
     if (!router || !username || !password)
         return -1;
+
+    // Check if the IP or username is rate-limited
+    if (is_user_blocked(router->auth_cache, username, ip))
+    {
+        char response[] = "Too many failed attempts. Try again later.\n";
+        write(client_fd, response, strlen(response));
+        close(client_fd);
+        return -1;
+    }
 
     // First check if user is already logged in
     if (has_user(router->user_cache, username))
@@ -221,6 +258,9 @@ int handle_authentication(Router *router, int client_fd, const char *username, c
     // If not logged in, authenticate credentials
     if (authenticate_user(router->user_db, username, password) == DB_SUCCESS)
     {
+        // Reset failed login attempts (remove from AuthCache)
+        reset_auth_attempts(router->auth_cache, username, ip);
+
         if (handle_new_connection(router, username) == 1)
         {
             int new_port = get_user_port(router->user_cache, username);
@@ -241,6 +281,9 @@ int handle_authentication(Router *router, int client_fd, const char *username, c
     }
     else
     {
+        // Track failed login attempt
+        track_failed_login(router->auth_cache, username, ip);
+
         char response[] = "Authentication failed: Invalid username or password\n";
         write(client_fd, response, strlen(response));
         close(client_fd);
@@ -276,7 +319,6 @@ void *router_socket_thread(Router *router)
     }
 
     struct epoll_event events[MAX_EVENTS];
-    struct epoll_event ev;
     int retry_count = 0;
     const int MAX_RETRIES = 3;
 
@@ -307,47 +349,55 @@ void *router_socket_thread(Router *router)
                 struct sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
 
-                int client_fd = accept(router->socket.socket_fd,
-                                       (struct sockaddr *)&client_addr,
-                                       &client_len);
-
-                if (client_fd < 0)
+                ClientConnectionData *client_data = malloc(sizeof(ClientConnectionData));
+                if (!client_data)
                 {
+                    perror("Failed to allocate memory for client data");
+                    continue;
+                }
+
+                client_data->client_fd = accept(router->socket.socket_fd,
+                                                (struct sockaddr *)&client_addr,
+                                                &client_len);
+
+                if (client_data->client_fd < 0)
+                {
+                    free(client_data);
                     if (errno == EAGAIN || errno == EWOULDBLOCK)
                     {
                         break;
                     }
                     continue;
                 }
+                // Store client IP
+                inet_ntop(AF_INET, &client_addr.sin_addr, client_data->client_ip, INET_ADDRSTRLEN);
 
                 // Set socket to non-blocking
-                int flags = fcntl(client_fd, F_GETFL, 0);
-                fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+                int flags = fcntl(client_data->client_fd, F_GETFL, 0);
+                fcntl(client_data->client_fd, F_SETFL, flags | O_NONBLOCK);
 
                 // Add new client to epoll
                 struct epoll_event ev;
                 ev.events = EPOLLIN;
-                ev.data.fd = client_fd;
-                if (epoll_ctl(router->socket.epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0)
+                ev.data.ptr = client_data;
+                if (epoll_ctl(router->socket.epoll_fd, EPOLL_CTL_ADD, client_data->client_fd, &ev) < 0)
                 {
                     printf("Failed to add client to epoll\n");
-                    close(client_fd);
+                    close(client_data->client_fd);
+                    free(client_data);
                     continue;
                 }
-
                 printf("[Router] New connection from %s:%d (fd: %d)\n",
-                       inet_ntoa(client_addr.sin_addr),
-                       ntohs(client_addr.sin_port),
-                       client_fd);
+                       client_data->client_ip, ntohs(client_addr.sin_port), client_data->client_fd);
 
                 router->socket.connections_handled++;
             }
             else
             {
                 // Handle data from clients
-                int client_fd = events[i].data.fd;
+                ClientConnectionData *client_data = (ClientConnectionData *)events[i].data.ptr;
                 char buffer[1024];
-                ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+                ssize_t bytes_read = read(client_data->client_fd, buffer, sizeof(buffer) - 1);
 
                 if (bytes_read > 0)
                 {
@@ -361,30 +411,29 @@ void *router_socket_thread(Router *router)
                     {
                         if (strcmp(command, "AUTH") == 0)
                         {
-                            handle_authentication(router, client_fd, username, password);
+                            handle_authentication(router, client_data->client_fd, username, password, client_data->client_ip);
                         }
                         else if (strcmp(command, "REG") == 0)
                         {
-                            handle_registration(router, client_fd, username, password);
+                            handle_registration(router, client_data->client_fd, username, password);
                         }
                         else
                         {
                             char response[] = "Unknown command\n";
-                            write(client_fd, response, strlen(response));
+                            write(client_data->client_fd, response, strlen(response));
                         }
                     }
                     else
                     {
                         char response[] = "Invalid command format. Use: AUTH username password or REG username password\n";
-                        write(client_fd, response, strlen(response));
+                        write(client_data->client_fd, response, strlen(response));
                     }
                 }
                 else if (bytes_read == 0)
                 {
                     // Client disconnected
-                    printf("[Router] Client on fd %d disconnected\n", client_fd);
-                    epoll_ctl(router->socket.epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
+                    printf("[Router] Client on fd %d disconnected\n", client_data->client_fd);
+                    cleanup_client_connection(client_data, router->socket.epoll_fd);
                 }
             }
         }
@@ -392,14 +441,19 @@ void *router_socket_thread(Router *router)
 
     for (int i = 0; i < MAX_EVENTS; i++)
     {
-        if (events[i].data.fd > 0)
+        if (events[i].data.ptr)
         {
-            close(events[i].data.fd);
+            ClientConnectionData *client_data = (ClientConnectionData *)events[i].data.ptr;
+            if (client_data)
+            {
+                cleanup_client_connection(client_data, router->socket.epoll_fd);
+            }
         }
     }
 
     return NULL;
 }
+
 
 int start_router(Router *router)
 {

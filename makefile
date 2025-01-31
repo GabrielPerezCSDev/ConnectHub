@@ -9,7 +9,7 @@ LIBS=-lsqlite3 -lbcrypt
 # Source files
 SRCS=$(SRCDIR)/server.c $(SRCDIR)/router.c $(SRCDIR)/socket_pool.c $(SRCDIR)/socket.c
 DB_SRCS=$(DBDIR)/user_db.c    
-UTIL_SRCS=$(UTILDIR)/user_cache.c
+UTIL_SRCS=$(UTILDIR)/user_cache.c $(UTILDIR)/auth_cache.c
 
 # Object files
 OBJS=$(SRCS:.c=.o)
