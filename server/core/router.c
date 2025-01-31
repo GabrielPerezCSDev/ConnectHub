@@ -3,18 +3,6 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-typedef enum SessionKeyError
-{
-    SESSION_KEY_SUCCESS = 0,
-    SESSION_KEY_FILE_ERROR,
-    SESSION_KEY_READ_ERROR
-} SessionKeyError;
-
-struct SessionKeyResult
-{
-    uint32_t key;
-    SessionKeyError error;
-};
 
 struct SessionKeyResult generate_session_key()
 {
@@ -535,15 +523,30 @@ void shut_down_router(Router *router)
 int handle_new_connection(Router *router, const char *username)
 {
     // create the session key for the user
-    uint32_t session_key = generate_session_key();
-    printf("session key generated: %u\n", session_key);
-    int port_number = assign_user_socket(router, session_key);
+    struct SessionKeyResult result = generate_session_key();
+    // Handle session key generation errors
+    if (result.error != SESSION_KEY_SUCCESS)
+    {
+        if (result.error == SESSION_KEY_FILE_ERROR)
+        {
+            fprintf(stderr, "[ERROR] Failed to open /dev/urandom for reading session key.\n");
+        }
+        else if (result.error == SESSION_KEY_READ_ERROR)
+        {
+            fprintf(stderr, "[ERROR] Failed to read session key from /dev/urandom.\n");
+        }
+        return -1; // Indicate failure
+    }
+
+    printf("[INFO] Session key generated: %u\n", result.key);
+
+    int port_number = assign_user_socket(router, result.key);
     if (port_number == -1)
     {
-        printf("could not assign user a socket....");
+        fprintf(stderr, "[ERROR] Could not assign user a socket.\n");
         return -1;
     }
 
-    add_user(router->user_cache, username, port_number, session_key);
+    add_user(router->user_cache, username, port_number, result.key);
     return 1;
 }
